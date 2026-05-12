@@ -9,7 +9,6 @@ import {
 import { Link } from 'react-router-dom'
 import { sortBySemVer } from '../utils/semver'
 
-// ── Stat card ─────────────────────────────────────────────────────────────────
 function StatCard({
   label,
   value,
@@ -45,7 +44,6 @@ function StatCard({
   return to ? <Link to={to}>{inner}</Link> : <div>{inner}</div>
 }
 
-// ── Recent timeline entry ─────────────────────────────────────────────────────
 function RecentEntry({ action, serial, ts }: { action: string; serial: string; ts: string }) {
   const date = new Date(ts)
   const time = date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
@@ -69,7 +67,6 @@ function RecentEntry({ action, serial, ts }: { action: string; serial: string; t
   )
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const { user } = useAuth()
 
@@ -82,7 +79,6 @@ export default function DashboardPage() {
   const sortedFw    = sortBySemVer(firmware, f => f.version)
   const latestFw    = sortedFw[0]?.version ?? '—'
 
-  // Status breakdown for bar chart
   const statusGroups: Record<string, number> = {}
   for (const d of devices) {
     const s = d.status.toLowerCase()
@@ -96,7 +92,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* ── Greeting ──────────────────────────────────────────── */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
           Good day, {firstName} 👋
@@ -106,7 +101,6 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* ── Stat Cards ────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Total Devices"
@@ -146,10 +140,8 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* ── Bento Row ─────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
-        {/* Chart (3 cols) */}
         <div className="card p-5 lg:col-span-3">
           <div className="flex items-center justify-between mb-5">
             <div>
@@ -168,7 +160,6 @@ export default function DashboardPage() {
           }
         </div>
 
-        {/* Recent activity (2 cols) */}
         <div className="card p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -197,7 +188,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Outdated devices alert ────────────────────────────── */}
       {outdated.length > 0 && (
         <div className="card p-4 border-amber-300 dark:border-amber-700/50 bg-amber-50/50 dark:bg-amber-950/10 animate-fade-in">
           <div className="flex items-start gap-3">

@@ -1,4 +1,4 @@
-﻿using DeviceCycle.Server.Models;
+using DeviceCycle.Server.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,14 +19,7 @@ public class ChangeLogsController : ControllerBase
         _context = context;
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // GET /api/changelogs/device/{deviceId}
-    // ──────────────────────────────────────────────────────────────
-    /// <summary>
-    /// Get the full change history for a device, ordered newest first.
-    /// Used for lifecycle auditing and UI timeline views.
-    /// </summary>
-    /// <param name="deviceId">Device ID</param>
+    // GET /api/changelogs/device/{deviceId} — full history for a single device
     [HttpGet("device/{deviceId:int}")]
     [ProducesResponseType(typeof(DeviceHistoryDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -53,17 +46,7 @@ public class ChangeLogsController : ControllerBase
             logs));
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // GET /api/changelogs?deviceId=&action=&from=&to=
-    // ──────────────────────────────────────────────────────────────
-    /// <summary>
-    /// Query change logs across all devices with optional filters.
-    /// Supports filtering by device, action keyword, and date range.
-    /// </summary>
-    /// <param name="deviceId">Optional device ID filter</param>
-    /// <param name="action">Optional action keyword filter (e.g. FIRMWARE, STATUS)</param>
-    /// <param name="from">Optional start date (UTC, inclusive)</param>
-    /// <param name="to">Optional end date (UTC, inclusive)</param>
+    // GET /api/changelogs — supports optional filters: deviceId, action, from, to
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<ChangeLogEntryWithDeviceDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<ChangeLogEntryWithDeviceDto>>> GetChangeLogs(
@@ -91,6 +74,7 @@ public class ChangeLogsController : ControllerBase
             .Select(c => new ChangeLogEntryWithDeviceDto(
                 c.Id,
                 c.DeviceId,
+                // Use tombstone serial for deleted devices, otherwise pull from Device
                 c.SerialNumber ?? (c.Device != null ? c.Device.SerialNumber : "Unknown"),
                 c.Action,
                 c.CreatedAt))
@@ -100,14 +84,10 @@ public class ChangeLogsController : ControllerBase
     }
 }
 
-// ──────────────────────────────────────────────────────────────────
 // DTOs
-// ──────────────────────────────────────────────────────────────────
-
-/// <summary>A single audit log entry.</summary>
 public record ChangeLogEntryDto(int Id, string Action, DateTime CreatedAt);
 
-/// <summary>A single audit log entry with device identifiers, for cross-device queries.</summary>
+// DeviceId is nullable for entries that refer to deleted devices
 public record ChangeLogEntryWithDeviceDto(
     int Id,
     int? DeviceId,
@@ -115,7 +95,6 @@ public record ChangeLogEntryWithDeviceDto(
     string Action,
     DateTime CreatedAt);
 
-/// <summary>Full lifecycle history for a device.</summary>
 public record DeviceHistoryDto(
     int DeviceId,
     string SerialNumber,

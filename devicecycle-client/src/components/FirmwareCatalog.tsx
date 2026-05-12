@@ -5,7 +5,6 @@ import { sortBySemVer, compareSemVer, getVersionBumpType } from '../utils/semver
 import { useAuth } from '../context/AuthContext'
 import { Plus, Layers, AlertTriangle, Star, X, Loader2, AlertCircle, Tag } from 'lucide-react'
 
-// ── Bump-type badge ───────────────────────────────────────────────────────────
 function BumpBadge({ type }: { type: 'major' | 'minor' | 'patch' | 'latest' }) {
   const styles = {
     major:  'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-800/50',
@@ -20,7 +19,6 @@ function BumpBadge({ type }: { type: 'major' | 'minor' | 'patch' | 'latest' }) {
   )
 }
 
-// ── Add Firmware Modal ────────────────────────────────────────────────────────
 function AddFirmwareModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient()
   const [version, setVersion] = useState('')
@@ -105,7 +103,6 @@ function AddFirmwareModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-// ── Firmware Card ─────────────────────────────────────────────────────────────
 function FirmwareCard({
   fw,
   isLatest,
@@ -121,7 +118,6 @@ function FirmwareCard({
 
   return (
     <div className={`card-hover p-4 animate-fade-in ${isLatest ? 'ring-1 ring-brand-500/30 dark:ring-brand-400/20' : ''}`}>
-      {/* Top row */}
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-2.5">
           <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
@@ -148,7 +144,6 @@ function FirmwareCard({
         </div>
       </div>
 
-      {/* Notes */}
       {fw.notes ? (
         <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-3">
           {fw.notes}
@@ -157,7 +152,6 @@ function FirmwareCard({
         <p className="text-xs text-gray-400 dark:text-gray-600 italic">No release notes</p>
       )}
 
-      {/* Rank indicator */}
       <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800/60 flex items-center justify-between">
         <span className="text-[10px] text-gray-400 dark:text-gray-600">
           {isLatest ? 'Latest stable' : `${rank} version${rank !== 1 ? 's' : ''} behind`}
@@ -174,7 +168,6 @@ function FirmwareCard({
   )
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
 export default function FirmwareCatalog() {
   const { user } = useAuth()
   const isAdmin  = user?.role === 'Admin'
@@ -185,13 +178,11 @@ export default function FirmwareCatalog() {
     queryFn:  getFirmwareVersions,
   })
 
-  // Sort newest → oldest using SemVer (not insertion order)
   const versions = sortBySemVer(raw, f => f.version, true)
   const latestVersion = versions[0]?.version ?? null
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <Layers size={15} strokeWidth={1.75} />
@@ -211,7 +202,6 @@ export default function FirmwareCatalog() {
         )}
       </div>
 
-      {/* Grid */}
       {isLoading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (

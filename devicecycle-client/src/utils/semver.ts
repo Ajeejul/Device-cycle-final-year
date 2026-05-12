@@ -1,15 +1,8 @@
-/**
- * Parses a semver string like "1.2.3" or "v2.0.0" into [major, minor, patch].
- */
 function parse(v: string): [number, number, number] {
   const parts = v.replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0)
   return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0]
 }
 
-/**
- * Compares two semver strings.
- * Returns -1 if a < b, 0 if equal, 1 if a > b.
- */
 export function compareSemVer(a: string, b: string): number {
   const [aMaj, aMin, aPat] = parse(a)
   const [bMaj, bMin, bPat] = parse(b)
@@ -19,9 +12,6 @@ export function compareSemVer(a: string, b: string): number {
   return 0
 }
 
-/**
- * Returns the type of version bump when going from oldVer → newVer.
- */
 export function getVersionBumpType(
   oldVer: string,
   newVer: string,
@@ -34,9 +24,6 @@ export function getVersionBumpType(
   return 'same'
 }
 
-/**
- * Sorts an array of items by their semver version (descending = newest first by default).
- */
 export function sortBySemVer<T>(
   items: T[],
   getVersion: (item: T) => string,
@@ -48,9 +35,6 @@ export function sortBySemVer<T>(
   })
 }
 
-/**
- * Returns true if candidate is strictly newer than baseline.
- */
 export function isNewerVersion(candidate: string, baseline: string): boolean {
   return compareSemVer(candidate, baseline) > 0
 }

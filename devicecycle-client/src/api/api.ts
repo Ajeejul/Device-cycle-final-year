@@ -2,15 +2,30 @@ import {
   MOCK_DEVICES, MOCK_FIRMWARE, MOCK_CHANGELOGS, MOCK_OUTDATED,
 } from '../mocks/mockData'
 
-// In dev:  Vite proxy forwards /api → https://localhost:7110 (no cert issues, CORS bypassed)
-// In prod: served from .NET wwwroot, so /api is same-origin automatically
+// ──────────────────────────────────────────────────────────────
+// api.ts — thin wrapper around the DeviceCycle REST API.
+//
+// Strategy: every exported function first tries the real backend.
+// If the server is unreachable (network error or 5xx proxy error)
+// a MockFallbackError is thrown internally and the function falls
+// back to in-memory mock data so the UI still works offline or
+// during development without a running backend.
+// ──────────────────────────────────────────────────────────────
+
 const API_BASE = '/api'
 
+// ── Helpers ───────────────────────────────────────────────────
+
+/** Retrieves the JWT from localStorage, or null if not logged in. */
 function getToken(): string | null {
   return localStorage.getItem('dc-token')
 }
 
-/** Returns true when backend is unreachable (direct fetch TypeError) */
+/**
+ * Returns true when the error is a browser-level network failure
+ * (e.g. server not running, DNS failure).
+ * These should trigger the mock fallback rather than surfacing as user errors.
+ */
 function isConnectionError(e: unknown): boolean {
   if (!(e instanceof TypeError)) return false
   const msg = (e as TypeError).message.toLowerCase()
@@ -18,14 +33,25 @@ function isConnectionError(e: unknown): boolean {
 }
 
 /**
- * Returns true when the Vite proxy itself returned 500/502/503/504
- * because it could not reach the backend (ECONNREFUSED).
- * In this case the body is plain text (not JSON), so body will be null.
+ * Returns true when the response looks like a proxy/gateway error
+ * with no useful body — e.g. a Vite dev proxy failing to reach the backend.
  */
 function isProxyError(status: number, body: unknown): boolean {
   return (status === 500 || status === 502 || status === 503 || status === 504) && body === null
 }
 
+// ── Core fetch wrapper ────────────────────────────────────────
+
+/**
+ * Sends an authenticated fetch request to `${API_BASE}${endpoint}`.
+ *
+ * - Attaches the JWT Bearer token from localStorage if available.
+ * - On 401: clears stored credentials and redirects to /login
+ *   (unless the failing endpoint is the login endpoint itself).
+ * - On 204 No Content: returns undefined cast to T.
+ * - On connection / proxy errors: throws MockFallbackError so callers
+ *   can silently fall back to mock data.
+ */
 async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
   try {
@@ -33,19 +59,19 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        // Include Bearer token only when one is stored
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers ?? {}),
       },
     })
 
     if (res.status === 401) {
-      // If this IS the login request, extract the error message and throw it
-      // so the login form can display it — don't redirect
       if (endpoint.includes('/auth/login')) {
+        // For the login endpoint, surface the server's error message directly
         const body = await res.json().catch(() => null)
         throw new Error(body?.message ?? 'Invalid email or password.')
       }
-      // For all other 401s (expired session), redirect to login
+      // For all other endpoints, a 401 means the session expired — force re-login
       localStorage.removeItem('dc-token')
       localStorage.removeItem('dc-user')
       window.location.href = '/login'
@@ -53,11 +79,10 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
     }
 
     if (!res.ok) {
-      // Try to parse as JSON — real backend errors always return JSON
       const body = await res.json().catch(() => null)
-      // Vite proxy can't reach backend → 500 with no JSON body → fall back to mock
+      // Treat gateway errors with empty bodies as connection failures → mock fallback
       if (isProxyError(res.status, body)) throw new MockFallbackError()
-      // ASP.NET Identity returns { errors: [...] } array for validation failures
+      // Unwrap ASP.NET Identity error arrays into a readable string
       const identityErrors = Array.isArray(body?.errors)
         ? (body.errors as Array<string | { description?: string }>)
             .map(e => (typeof e === 'string' ? e : e?.description ?? ''))
@@ -67,32 +92,39 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
       throw new Error(body?.message ?? identityErrors ?? `Request failed (${res.status})`)
     }
 
+    // DELETE endpoints return 204 with no body
     if (res.status === 204) return undefined as T
     return res.json() as Promise<T>
   } catch (err) {
     if (isConnectionError(err)) {
-      // Backend is offline — signal callers to use mock data
+      // Network-level failure — signal to callers that mock data should be used
       throw new MockFallbackError()
     }
     throw err
   }
 }
 
-/** Sentinel error that API functions catch to return mock data instead */
+// ── Mock fallback sentinel ────────────────────────────────────
+
+/** Thrown internally to signal that a mock fallback should be used. */
 class MockFallbackError extends Error {
   constructor() { super('__mock__') }
 }
 
+/** Type guard — returns true only for MockFallbackError instances. */
 function isMock(e: unknown): boolean {
   return e instanceof MockFallbackError
 }
 
-// ── Auth ─────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// Auth API
+// ──────────────────────────────────────────────────────────────
 
 export interface LoginRequest    { email: string; password: string }
 export interface RegisterRequest { email: string; password: string; fullName?: string }
 export interface RegisterAdminRequest { email: string; password: string; fullName?: string; adminCode: string }
 
+/** Shape of a successful login response from the server. */
 export interface LoginResponse {
   token: string
   email: string
@@ -101,10 +133,16 @@ export interface LoginResponse {
   expiresAt: string
 }
 
-// In-memory registry of mock-registered users (keyed by lowercase email)
+// In-memory store used by the mock fallback to simulate registered users
 interface MockUser { email: string; password: string; fullName: string | null; role: string }
 const mockUserRegistry = new Map<string, MockUser>()
 
+/**
+ * Authenticates a user and returns a login response containing a JWT.
+ * Mock fallback: accepts any email/password and returns a mock Admin token.
+ * If the email was previously registered via the mock register functions,
+ * the stored role and name are used instead.
+ */
 export const loginUser = async (d: LoginRequest): Promise<LoginResponse> => {
   try {
     return await fetchApi<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(d) })
@@ -112,8 +150,6 @@ export const loginUser = async (d: LoginRequest): Promise<LoginResponse> => {
     if (isMock(e)) {
       const key = d.email.toLowerCase()
       const registered = mockUserRegistry.get(key)
-      // If user registered in this session, use their stored role
-      // Otherwise default to Admin so the demo is fully explorable
       const role     = registered?.role     ?? 'Admin'
       const fullName = registered?.fullName ?? d.email.split('@')[0]
       return {
@@ -128,6 +164,10 @@ export const loginUser = async (d: LoginRequest): Promise<LoginResponse> => {
   }
 }
 
+/**
+ * Registers a new standard (read-only) user account.
+ * Mock fallback: stores the user in the in-memory registry with role "User".
+ */
 export const registerUser = async (d: RegisterRequest): Promise<{ message: string }> => {
   try {
     return await fetchApi<{ message: string }>('/auth/register', { method: 'POST', body: JSON.stringify(d) })
@@ -142,11 +182,17 @@ export const registerUser = async (d: RegisterRequest): Promise<{ message: strin
   }
 }
 
+/**
+ * Registers a new administrator account using the shared admin code.
+ * Mock fallback: validates against the hardcoded demo code "ADMIN@DEVICE2024"
+ * and stores the user with role "Admin".
+ */
 export const registerAdmin = async (d: RegisterAdminRequest): Promise<{ message: string }> => {
   try {
     return await fetchApi<{ message: string }>('/auth/register-admin', { method: 'POST', body: JSON.stringify(d) })
   } catch (e) {
     if (isMock(e)) {
+      // Demo admin code used when there is no backend
       if (d.adminCode !== 'ADMIN@DEVICE2024')
         throw new Error('Invalid admin registration code.')
       const key = d.email.toLowerCase()
@@ -158,8 +204,11 @@ export const registerAdmin = async (d: RegisterAdminRequest): Promise<{ message:
   }
 }
 
-// ── Devices ──────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// Device API
+// ──────────────────────────────────────────────────────────────
 
+/** Full device representation returned by the API. */
 export interface DeviceDto {
   id: number
   serialNumber: string
@@ -170,6 +219,7 @@ export interface DeviceDto {
   updatedAt: string
 }
 
+/** Extended DTO returned by the /devices/outdated endpoint. */
 export interface OutdatedDeviceDto {
   id: number
   serialNumber: string
@@ -180,6 +230,7 @@ export interface OutdatedDeviceDto {
   updatedAt: string
 }
 
+/** Request body for creating a new device. */
 export interface CreateDeviceRequest {
   serialNumber: string
   model?: string
@@ -187,6 +238,7 @@ export interface CreateDeviceRequest {
   firmwareVersion?: string
 }
 
+/** Request body for partially updating an existing device. */
 export interface UpdateDeviceRequest {
   serialNumber?: string
   model?: string
@@ -194,10 +246,14 @@ export interface UpdateDeviceRequest {
   firmwareVersion?: string
 }
 
-// In-memory store for mock CRUD operations
+// Mutable mock device store — modified by create/update/delete mock fallbacks
 let mockDevices = [...MOCK_DEVICES]
 let nextMockId  = 100
 
+/**
+ * Fetches all devices, optionally filtered by lifecycle status.
+ * Mock fallback: filters the in-memory device list.
+ */
 export const getDevices = async (status?: string): Promise<DeviceDto[]> => {
   try {
     return await fetchApi<DeviceDto[]>(`/devices${status ? `?status=${encodeURIComponent(status)}` : ''}`)
@@ -207,6 +263,10 @@ export const getDevices = async (status?: string): Promise<DeviceDto[]> => {
   }
 }
 
+/**
+ * Fetches a single device by its numeric ID.
+ * Mock fallback: searches the in-memory device list.
+ */
 export const getDevice = async (id: number): Promise<DeviceDto> => {
   try {
     return await fetchApi<DeviceDto>(`/devices/${id}`)
@@ -220,6 +280,10 @@ export const getDevice = async (id: number): Promise<DeviceDto> => {
   }
 }
 
+/**
+ * Creates a new device on the server.
+ * Mock fallback: validates serial uniqueness and pushes to the in-memory list.
+ */
 export const createDevice = async (d: CreateDeviceRequest): Promise<DeviceDto> => {
   try {
     return await fetchApi<DeviceDto>('/devices', { method: 'POST', body: JSON.stringify(d) })
@@ -241,6 +305,10 @@ export const createDevice = async (d: CreateDeviceRequest): Promise<DeviceDto> =
   }
 }
 
+/**
+ * Partially updates an existing device (only provided fields are changed).
+ * Mock fallback: merges non-undefined fields into the matching in-memory entry.
+ */
 export const updateDevice = async (id: number, d: UpdateDeviceRequest): Promise<DeviceDto> => {
   try {
     return await fetchApi<DeviceDto>(`/devices/${id}`, { method: 'PUT', body: JSON.stringify(d) })
@@ -248,6 +316,7 @@ export const updateDevice = async (id: number, d: UpdateDeviceRequest): Promise<
     if (isMock(e)) {
       const idx = mockDevices.findIndex(x => x.id === id)
       if (idx === -1) throw new Error('Device not found')
+      // Only spread fields that were explicitly provided in the request
       mockDevices[idx] = {
         ...mockDevices[idx],
         ...(d.serialNumber    !== undefined && { serialNumber:    d.serialNumber }),
@@ -262,6 +331,10 @@ export const updateDevice = async (id: number, d: UpdateDeviceRequest): Promise<
   }
 }
 
+/**
+ * Permanently deletes a device by ID.
+ * Mock fallback: removes the entry from the in-memory list.
+ */
 export const deleteDevice = async (id: number): Promise<void> => {
   try {
     return await fetchApi<void>(`/devices/${id}`, { method: 'DELETE' })
@@ -271,6 +344,10 @@ export const deleteDevice = async (id: number): Promise<void> => {
   }
 }
 
+/**
+ * Returns all devices whose firmware version is behind the latest catalog entry.
+ * Mock fallback: returns the static MOCK_OUTDATED list.
+ */
 export const getOutdatedDevices = async (): Promise<OutdatedDeviceDto[]> => {
   try {
     return await fetchApi<OutdatedDeviceDto[]>('/devices/outdated')
@@ -280,6 +357,10 @@ export const getOutdatedDevices = async (): Promise<OutdatedDeviceDto[]> => {
   }
 }
 
+/**
+ * Returns all devices with no firmware version assigned.
+ * Mock fallback: filters the in-memory list for null firmwareVersion.
+ */
 export const getMissingFirmwareDevices = async (): Promise<DeviceDto[]> => {
   try {
     return await fetchApi<DeviceDto[]>('/devices/missing-firmware')
@@ -289,14 +370,23 @@ export const getMissingFirmwareDevices = async (): Promise<DeviceDto[]> => {
   }
 }
 
-// ── Firmware ─────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// Firmware API
+// ──────────────────────────────────────────────────────────────
 
+/** Single firmware catalog entry. */
 export interface FirmwareVersionDto  { id: number; version: string; notes: string | null }
+/** Request body for publishing a new firmware version. */
 export interface AddFirmwareRequest  { version: string; notes?: string }
 
+// Mutable mock firmware store
 let mockFirmware = [...MOCK_FIRMWARE]
 let nextFwId     = 10
 
+/**
+ * Fetches the full firmware version catalog.
+ * Mock fallback: returns a copy of the in-memory firmware list.
+ */
 export const getFirmwareVersions = async (): Promise<FirmwareVersionDto[]> => {
   try {
     return await fetchApi<FirmwareVersionDto[]>('/firmware')
@@ -306,6 +396,10 @@ export const getFirmwareVersions = async (): Promise<FirmwareVersionDto[]> => {
   }
 }
 
+/**
+ * Publishes a new firmware version to the catalog.
+ * Mock fallback: validates version uniqueness and pushes to the in-memory list.
+ */
 export const addFirmwareVersion = async (d: AddFirmwareRequest): Promise<FirmwareVersionDto> => {
   try {
     return await fetchApi<FirmwareVersionDto>('/firmware', { method: 'POST', body: JSON.stringify(d) })
@@ -321,10 +415,14 @@ export const addFirmwareVersion = async (d: AddFirmwareRequest): Promise<Firmwar
   }
 }
 
-// ── ChangeLogs ───────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// Change Log API
+// ──────────────────────────────────────────────────────────────
 
+/** A single change-log entry without device context. */
 export interface ChangeLogEntryDto { id: number; action: string; createdAt: string }
 
+/** A change-log entry enriched with the device's serial number. */
 export interface ChangeLogEntryWithDeviceDto {
   id: number
   deviceId: number | null
@@ -333,6 +431,7 @@ export interface ChangeLogEntryWithDeviceDto {
   createdAt: string
 }
 
+/** Full device history including current state and ordered event list. */
 export interface DeviceHistoryDto {
   deviceId: number
   serialNumber: string
@@ -344,6 +443,7 @@ export interface DeviceHistoryDto {
   history: ChangeLogEntryDto[]
 }
 
+/** Optional query filters for the change-log list endpoint. */
 export interface ChangeLogFilters {
   deviceId?: number
   action?: string
@@ -351,7 +451,12 @@ export interface ChangeLogFilters {
   to?: string
 }
 
+/**
+ * Fetches all change logs, optionally narrowed by the provided filters.
+ * Mock fallback: filters the static MOCK_CHANGELOGS array client-side.
+ */
 export const getChangeLogs = async (filters?: ChangeLogFilters): Promise<ChangeLogEntryWithDeviceDto[]> => {
+  // Build query string from whatever filters are provided
   const p = new URLSearchParams()
   if (filters?.deviceId) p.set('deviceId', String(filters.deviceId))
   if (filters?.action)   p.set('action',   filters.action)
@@ -364,6 +469,7 @@ export const getChangeLogs = async (filters?: ChangeLogFilters): Promise<ChangeL
     if (isMock(e)) {
       let logs = [...MOCK_CHANGELOGS]
       if (filters?.deviceId) logs = logs.filter(l => l.deviceId === filters.deviceId)
+      // Case-insensitive substring match for the action filter
       if (filters?.action)   logs = logs.filter(l => l.action.toUpperCase().includes(filters.action!.toUpperCase()))
       return logs
     }
@@ -371,6 +477,10 @@ export const getChangeLogs = async (filters?: ChangeLogFilters): Promise<ChangeL
   }
 }
 
+/**
+ * Fetches the complete change history for a specific device.
+ * Mock fallback: builds the history from MOCK_CHANGELOGS filtered by deviceId.
+ */
 export const getDeviceHistory = async (deviceId: number): Promise<DeviceHistoryDto> => {
   try {
     return await fetchApi<DeviceHistoryDto>(`/changelogs/device/${deviceId}`)

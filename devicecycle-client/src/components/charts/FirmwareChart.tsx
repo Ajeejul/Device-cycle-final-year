@@ -22,7 +22,6 @@ const STATUS_COLORS: Record<string, { light: string; dark: string }> = {
 
 const DEFAULT_COLOR = { light: '#6366f1', dark: '#818cf8' }
 
-// ── Custom Tooltip ─────────────────────────────────────────────────────────────
 function CustomTooltip({ active, payload, label }: {
   active?: boolean
   payload?: Array<{ value: number; payload: StatusData }>
@@ -44,7 +43,6 @@ function CustomTooltip({ active, payload, label }: {
   )
 }
 
-// ── Main Component ─────────────────────────────────────────────────────────────
 export default function FirmwareChart({ data }: Props) {
   const { theme } = useTheme()
   const isDark    = theme === 'dark'

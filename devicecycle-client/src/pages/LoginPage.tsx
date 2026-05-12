@@ -79,7 +79,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0c0c14] flex items-center justify-center p-4">
-      {/* Theme toggle */}
       <button
         onClick={toggleTheme}
         className="fixed top-5 right-5 btn-icon w-9 h-9"
@@ -89,7 +88,6 @@ export default function LoginPage() {
       </button>
 
       <div className="w-full max-w-sm animate-slide-up">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-brand mb-4">
             <Zap size={22} className="text-white" strokeWidth={2.5} />
@@ -99,7 +97,6 @@ export default function LoginPage() {
         </div>
 
         <div className="card p-6">
-          {/* Mode tabs */}
           <div className="flex bg-gray-100 dark:bg-gray-800/60 rounded-lg p-1 mb-6 gap-1">
             {(['login', 'register', 'register-admin'] as Mode[]).map(m => (
               <button
@@ -118,7 +115,6 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Full Name (register only) */}
             {mode !== 'login' && (
               <div className="space-y-1.5">
                 <label className="form-label">Full Name</label>
@@ -132,7 +128,6 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Email */}
             <div className="space-y-1.5">
               <label className="form-label">Email</label>
               <input
@@ -151,7 +146,6 @@ export default function LoginPage() {
               )}
             </div>
 
-            {/* Password */}
             <div className="space-y-1.5">
               <label className="form-label">Password</label>
               <div className="relative">
@@ -179,7 +173,6 @@ export default function LoginPage() {
               )}
             </div>
 
-            {/* Admin Code (admin register only) */}
             {mode === 'register-admin' && (
               <div className="space-y-1.5">
                 <label className="form-label flex items-center gap-1.5">
@@ -196,7 +189,6 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* API Error / Warning */}
             {apiError && (() => {
               const isNotRegistered = apiError.toLowerCase().includes('not registered')
               const isPasswordWeak  = /password|digit|uppercase|lowercase|character|length/i.test(apiError)
@@ -239,7 +231,6 @@ export default function LoginPage() {
           </form>
         </div>
 
-        {/* Register success hint */}
         {registerMutation.isSuccess && (
           <p className="text-center text-xs text-emerald-600 dark:text-emerald-400 mt-4 animate-fade-in">
             Account created! You can now sign in.

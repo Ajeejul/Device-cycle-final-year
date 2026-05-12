@@ -9,7 +9,20 @@ import {
 } from 'lucide-react'
 import DeviceForm from './DeviceForm'
 
-// ── Status Badge ──────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// DeviceGrid — main device listing page component.
+// Renders search/filter controls, a responsive card grid of
+// devices, and hosts the DeviceForm modal and delete confirmation
+// dialog. Admin users see edit/delete controls; regular users
+// have read-only access.
+// ──────────────────────────────────────────────────────────────
+
+// ── Sub-components ────────────────────────────────────────────
+
+/**
+ * Renders a colour-coded pill badge for a device's lifecycle status.
+ * Statuses not explicitly handled fall back to the "Inactive" style.
+ */
 function StatusBadge({ status }: { status: string }) {
   const s = status.toLowerCase()
   if (s === 'active')
@@ -19,12 +32,15 @@ function StatusBadge({ status }: { status: string }) {
         Active
       </span>
     )
-  if (s === 'retired')   return <span className="badge-retired"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" />Retired</span>
+  if (s === 'retired')        return <span className="badge-retired"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" />Retired</span>
   if (s === 'decommissioned') return <span className="badge-decommissioned"><span className="w-1.5 h-1.5 rounded-full bg-red-500" />Decommissioned</span>
   return <span className="badge-inactive"><span className="w-1.5 h-1.5 rounded-full bg-gray-400" />Inactive</span>
 }
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
+/**
+ * Animated placeholder card shown while device data is loading.
+ * Matches the rough shape of a real DeviceCard to avoid layout shift.
+ */
 function SkeletonCard() {
   return (
     <div className="card p-4 space-y-3 animate-pulse">
@@ -44,7 +60,11 @@ function SkeletonCard() {
   )
 }
 
-// ── Device Card ───────────────────────────────────────────────────────────────
+/**
+ * A single device card showing serial number, model, status badge,
+ * firmware version, last-updated time, and (for admins) edit/delete buttons.
+ * The edit/delete buttons are hidden until the card is hovered.
+ */
 function DeviceCard({
   device,
   isAdmin,
@@ -60,7 +80,7 @@ function DeviceCard({
 
   return (
     <div className="card-hover p-4 group animate-fade-in">
-      {/* Header row */}
+      {/* ── Card header: icon, serial number, model ── */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-9 h-9 rounded-lg bg-brand-50 dark:bg-brand-950/40 flex items-center justify-center flex-shrink-0">
@@ -76,6 +96,7 @@ function DeviceCard({
           </div>
         </div>
 
+        {/* Admin action buttons — revealed on hover via group-hover */}
         {isAdmin && (
           <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2">
             <button
@@ -96,7 +117,7 @@ function DeviceCard({
         )}
       </div>
 
-      {/* Status + Firmware row */}
+      {/* ── Status badge + firmware version ── */}
       <div className="flex items-center justify-between gap-2">
         <StatusBadge status={device.status} />
         {device.firmwareVersion ? (
@@ -108,7 +129,7 @@ function DeviceCard({
         )}
       </div>
 
-      {/* Footer */}
+      {/* Relative time of last update */}
       <p className="text-[11px] text-gray-400 dark:text-gray-600 mt-2.5">
         Updated {ago}
       </p>
@@ -116,7 +137,10 @@ function DeviceCard({
   )
 }
 
-// ── Delete Confirm Modal ──────────────────────────────────────────────────────
+/**
+ * Confirmation modal displayed before permanently deleting a device.
+ * Disables the confirm button while the delete mutation is in flight.
+ */
 function DeleteModal({
   deviceId,
   onCancel,
@@ -153,14 +177,17 @@ function DeleteModal({
   )
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
+// Available status filter values — empty string means "All"
 const STATUS_FILTERS = ['', 'active', 'inactive', 'retired', 'decommissioned'] as const
+
+// ── Main component ────────────────────────────────────────────
 
 export default function DeviceGrid() {
   const { user } = useAuth()
   const qc = useQueryClient()
   const isAdmin = user?.role === 'Admin'
   const [searchParams, setSearchParams] = useSearchParams()
+  // Detect when the page was linked to with ?filter=outdated (from the dashboard)
   const isOutdatedFilter = searchParams.get('filter') === 'outdated'
 
   const [search, setSearch]             = useState('')
@@ -169,16 +196,18 @@ export default function DeviceGrid() {
   const [editing, setEditing]           = useState<DeviceDto | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
 
-  // Clear the outdated filter when user picks a status pill
+  // When the user picks a status tab, clear the URL "outdated" filter
   useEffect(() => {
     if (statusFilter) setSearchParams({})
   }, [statusFilter])
 
+  // ── Data fetching ──────────────────────────────────────────
   const { data: devices = [], isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['devices', statusFilter],
     queryFn:  () => getDevices(statusFilter || undefined),
   })
 
+  // Fetch outdated list only when the ?filter=outdated param is present
   const { data: outdatedList = [] } = useQuery({
     queryKey: ['outdated'],
     queryFn:  getOutdatedDevices,
@@ -189,16 +218,21 @@ export default function DeviceGrid() {
   const deleteMutation = useMutation({
     mutationFn: deleteDevice,
     onSuccess:  () => {
+      // Invalidate the device list so the grid refreshes without the deleted card
       qc.invalidateQueries({ queryKey: ['devices'] })
       setDeleteTarget(null)
     },
   })
 
+  // ── Filtering logic ────────────────────────────────────────
+
+  // When the outdated filter is active, limit the grid to only those device IDs
   const outdatedIds = new Set(outdatedList.map(o => o.id))
   const baseDevices = isOutdatedFilter && outdatedList.length > 0
     ? devices.filter(d => outdatedIds.has(d.id))
     : devices
 
+  // Apply the search box filter across serial number, model, and firmware
   const filtered = baseDevices.filter(d => {
     const q = search.toLowerCase()
     return (
@@ -208,12 +242,13 @@ export default function DeviceGrid() {
     )
   })
 
+  // ── Event handlers ────────────────────────────────────────
   const handleEditDevice = (d: DeviceDto) => { setEditing(d); setShowForm(true) }
   const handleCloseForm  = () => { setShowForm(false); setEditing(null) }
 
   return (
     <div className="space-y-4">
-      {/* ── Outdated filter banner ────────────────────────────────── */}
+      {/* ── Outdated firmware banner ── */}
       {isOutdatedFilter && (
         <div className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 animate-fade-in">
           <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
@@ -228,9 +263,9 @@ export default function DeviceGrid() {
         </div>
       )}
 
-      {/* ── Toolbar ───────────────────────────────────────────────── */}
+      {/* ── Search + filter toolbar ── */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Search */}
+        {/* Text search input */}
         <div className="relative">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
@@ -241,7 +276,7 @@ export default function DeviceGrid() {
           />
         </div>
 
-        {/* Status filter pills */}
+        {/* Status filter pill buttons */}
         <div className="flex items-center gap-1 bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 rounded-lg p-1">
           {STATUS_FILTERS.map(s => (
             <button
@@ -258,6 +293,7 @@ export default function DeviceGrid() {
           ))}
         </div>
 
+        {/* Refresh and Add Device buttons (right-aligned) */}
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => { refetch(); qc.invalidateQueries({ queryKey: ['changelogs'] }) }} disabled={isFetching} className="btn-secondary py-2">
             <RefreshCw size={13} className={isFetching ? 'animate-spin' : ''} />
@@ -272,13 +308,14 @@ export default function DeviceGrid() {
         </div>
       </div>
 
-      {/* ── Grid ──────────────────────────────────────────────────── */}
+      {/* ── Loading state: skeleton cards ── */}
       {isLoading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       )}
 
+      {/* ── Error state ── */}
       {isError && (
         <div className="card p-12 text-center">
           <AlertTriangle size={30} className="mx-auto text-red-400 mb-3" />
@@ -287,6 +324,7 @@ export default function DeviceGrid() {
         </div>
       )}
 
+      {/* ── Loaded state: device cards or empty message ── */}
       {!isLoading && !isError && (
         <>
           {filtered.length === 0 ? (
@@ -308,17 +346,19 @@ export default function DeviceGrid() {
               ))}
             </div>
           )}
+          {/* Result count footer */}
           <p className="text-xs text-gray-400 dark:text-gray-600">
             {filtered.length} of {devices.length} device{devices.length !== 1 ? 's' : ''}
           </p>
         </>
       )}
 
-      {/* ── Modals ────────────────────────────────────────────────── */}
+      {/* ── Add / Edit device modal ── */}
       {showForm && (
         <DeviceForm device={editing} onClose={handleCloseForm} onSuccess={handleCloseForm} />
       )}
 
+      {/* ── Delete confirmation modal ── */}
       {deleteTarget !== null && (
         <DeleteModal
           deviceId={deleteTarget}
@@ -331,7 +371,12 @@ export default function DeviceGrid() {
   )
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Utilities ─────────────────────────────────────────────────
+
+/**
+ * Returns a compact human-readable string describing how long ago
+ * the given Date occurred (e.g. "just now", "3m ago", "2h ago", "5d ago").
+ */
 function timeAgo(date: Date): string {
   const s = Math.floor((Date.now() - date.getTime()) / 1000)
   if (s < 60)  return 'just now'

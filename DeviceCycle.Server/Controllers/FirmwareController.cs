@@ -1,4 +1,4 @@
-﻿using DeviceCycle.Server.Models;
+using DeviceCycle.Server.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,28 +19,21 @@ public class FirmwareController : ControllerBase
         _context = context;
     }
 
-    // ──────────────────────────────────────────────────────────────
     // GET /api/firmware
-    // ──────────────────────────────────────────────────────────────
-    /// <summary>List all firmware versions, newest first.</summary>
     [HttpGet]
     [Authorize]
     [ProducesResponseType(typeof(IEnumerable<FirmwareVersionsDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<FirmwareVersionsDto>>> GetFirmwareVersionss()
     {
         var versions = await _context.FirmwareVersions
-            .OrderByDescending(f => f.Id)
+            .OrderByDescending(f => f.Id) // newest first
             .Select(f => new FirmwareVersionsDto(f.Id, f.Version, f.Notes))
             .ToListAsync();
 
         return Ok(versions);
     }
 
-    // ──────────────────────────────────────────────────────────────
     // GET /api/firmware/{id}
-    // ──────────────────────────────────────────────────────────────
-    /// <summary>Get a single firmware version by ID.</summary>
-    /// <param name="id">Firmware version ID</param>
     [HttpGet("{id:int}")]
     [Authorize]
     [ProducesResponseType(typeof(FirmwareVersionsDto), StatusCodes.Status200OK)]
@@ -54,10 +47,7 @@ public class FirmwareController : ControllerBase
         return Ok(new FirmwareVersionsDto(firmware.Id, firmware.Version, firmware.Notes));
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // POST /api/firmware
-    // ──────────────────────────────────────────────────────────────
-    /// <summary>Add a new firmware version to the catalog. Requires Admin role.</summary>
+    // POST /api/firmware — Admin only
     [HttpPost]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(FirmwareVersionsDto), StatusCodes.Status201Created)]
@@ -77,7 +67,6 @@ public class FirmwareController : ControllerBase
 
         var firmware = new FirmwareVersion
         {
-            // ✅ Let SQL Server generate Id
             Version = request.Version,
             Notes = request.Notes,
             ReleasedAt = DateTime.UtcNow
@@ -89,30 +78,19 @@ public class FirmwareController : ControllerBase
         return CreatedAtAction(
             nameof(GetFirmwareVersions),
             new { id = firmware.Id },
-            new FirmwareVersionsDto(
-                firmware.Id,
-                firmware.Version,
-                firmware.Notes
-            )
+            new FirmwareVersionsDto(firmware.Id, firmware.Version, firmware.Notes)
         );
     }
-    // ──────────────────────────────────────────────────────────────────
-    // DTOs
-    // ──────────────────────────────────────────────────────────────────
 
-    /// <summary>Firmware version read response.</summary>
+    // DTOs
     public record FirmwareVersionsDto(int Id, string Version, string? Notes);
 
-    /// <summary>Payload for adding a new firmware version.</summary>
     public class AddFirmwareVersionsRequest
     {
-        /// <example>3.0.1</example>
         [Required]
         [StringLength(50)]
         public string Version { get; set; } = null!;
 
-        /// <example>Security patch for CVE-2025-1234. Recommended for all devices.</example>
         public string? Notes { get; set; }
     }
-
 }

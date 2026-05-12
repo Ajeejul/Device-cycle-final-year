@@ -10,13 +10,13 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Controllers & API Explorer ──────────────────────────────────────────────
+// Register controllers with a custom DateTime converter to always serialize as UTC
 builder.Services.AddControllers()
     .AddJsonOptions(opts =>
         opts.JsonSerializerOptions.Converters.Add(new UtcDateTimeConverter()));
 builder.Services.AddEndpointsApiExplorer();
 
-// ── Swagger with JWT support ─────────────────────────────────────────────────
+// Swagger with JWT bearer support
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "DeviceCycle API", Version = "v1" });
@@ -41,9 +41,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-
-
-// ── CORS ──────────────────────────────────────────────────────────────────────
+// Allow the React dev server (port 8080) to call the API
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
@@ -54,14 +52,11 @@ builder.Services.AddCors(options =>
     });
 });
 
-
-
-
-// ── Database Context ──────────────────────────────────────────────────────────
+// EF Core with SQL Server
 builder.Services.AddDbContext<DeviceRegistrationLifecycleContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("dbcs")));
 
-// ── ASP.NET Core Identity ─────────────────────────────────────────────────────
+// ASP.NET Identity — password rules and user storage
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
     options.Password.RequireDigit = true;
@@ -74,7 +69,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<DeviceRegistrationLifecycleContext>()
 .AddDefaultTokenProviders();
 
-// ── JWT Authentication ────────────────────────────────────────────────────────
+// JWT authentication
 var jwtKey = builder.Configuration["Jwt:Key"]!;
 var jwtIssuer = builder.Configuration["Jwt:Issuer"]!;
 var jwtAudience = builder.Configuration["Jwt:Audience"]!;
@@ -100,10 +95,9 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
-// ────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
-// ── Seed Roles ────────────────────────────────────────────────────────────────
+// Seed default roles on startup
 try
 {
     using var scope = app.Services.CreateScope();
@@ -117,7 +111,7 @@ try
 catch (Exception ex)
 {
     var logger = app.Services.GetRequiredService<ILogger<Program>>();
-    logger.LogError(ex, "Role seeding failed — server will still start");
+    logger.LogError(ex, "Role seeding failed - server will still start");
 }
 
 app.UseDefaultFiles();
@@ -129,9 +123,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// CORS must come before auth
 app.UseCors("AllowReactApp");
 app.UseHttpsRedirection();
-
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -140,7 +134,7 @@ app.MapFallbackToFile("/index.html");
 
 app.Run();
 
-// ── Forces DateTime → "2026-04-16T06:52:00Z" so JS parses it as UTC ──────────
+// Ensures all DateTime values are serialized as UTC in JSON responses
 public class UtcDateTimeConverter : JsonConverter<DateTime>
 {
     public override DateTime Read(ref Utf8JsonReader reader, Type t, JsonSerializerOptions o)

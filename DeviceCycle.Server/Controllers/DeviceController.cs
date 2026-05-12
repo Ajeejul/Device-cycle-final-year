@@ -1,4 +1,4 @@
-﻿using DeviceCycle.Server.Models;
+using DeviceCycle.Server.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,22 +18,12 @@ public class DevicesController : ControllerBase
         _context = context;
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // GET /api/devices
-    // GET /api/devices?status=active
-    // ──────────────────────────────────────────────────────────────
-    /// <summary>List all devices, optionally filtered by status.</summary>
-    /// <param name="status">Optional status filter (e.g. active, retired, decommissioned)</param>
+    // GET /api/devices or GET /api/devices?status=active
     [HttpGet]
     [Authorize]
-    [ProducesResponseType(typeof(IEnumerable<DeviceDto>), StatusCodes.Status200OK)] // only for swagger to test and tell the responce type to swagger
+    [ProducesResponseType(typeof(IEnumerable<DeviceDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<DeviceDto>>> GetDevices([FromQuery] string? status)
     {
-        //IQueryable<Device> query = _context.Devices;
-
-        //if (!string.IsNullOrWhiteSpace(status))
-        //    query = query.Where(d => d.Status == status);
-
         var devices = await _context.Devices
             .Where(d => status == null || d.Status == status)
             .Select(d => ToDto(d))
@@ -42,11 +32,7 @@ public class DevicesController : ControllerBase
         return Ok(devices);
     }
 
-    // ──────────────────────────────────────────────────────────────
     // GET /api/devices/{id}
-    // ──────────────────────────────────────────────────────────────
-    /// <summary>Get a single device by ID.</summary>
-    /// <param name="id">Device ID</param>
     [HttpGet("{id:int}")]
     [Authorize]
     [ProducesResponseType(typeof(DeviceDto), StatusCodes.Status200OK)]
@@ -60,10 +46,7 @@ public class DevicesController : ControllerBase
         return Ok(ToDto(device));
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // POST /api/devices
-    // ──────────────────────────────────────────────────────────────
-    /// <summary>Add a new device. Requires Admin role.</summary>
+    // POST /api/devices — Admin only
     [HttpPost]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(DeviceDto), StatusCodes.Status201Created)]
@@ -92,11 +75,9 @@ public class DevicesController : ControllerBase
             UpdatedAt = now
         };
 
-
         _context.Devices.Add(device);
-
+        // Save first so EF populates device.Id before using it in the change log
         await _context.SaveChangesAsync();
-
 
         _context.ChangeLogs.Add(new ChangeLog
         {
@@ -110,13 +91,7 @@ public class DevicesController : ControllerBase
         return CreatedAtAction(nameof(GetDevice), new { id = device.Id }, ToDto(device));
     }
 
-
-
-    // ──────────────────────────────────────────────────────────────
-    // PUT /api/devices/{id}
-    // ──────────────────────────────────────────────────────────────
-    /// <summary>Update an existing device. Requires Admin role.</summary>
-    /// <param name="id">Device ID</param>
+    // PUT /api/devices/{id} — Admin only
     [HttpPut("{id:int}")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(DeviceDto), StatusCodes.Status200OK)]
@@ -135,7 +110,6 @@ public class DevicesController : ControllerBase
         var now = DateTime.UtcNow;
         var changeEntries = new List<string>();
 
-        // Check serial uniqueness if it changed
         if (!string.IsNullOrWhiteSpace(request.SerialNumber) &&
             request.SerialNumber != device.SerialNumber)
         {
@@ -168,7 +142,7 @@ public class DevicesController : ControllerBase
             device.FirmwareVersion = request.FirmwareVersion;
         }
 
-        // If nothing meaningful changed, still log a generic UPDATED entry
+        // If nothing changed, still log a generic update
         if (changeEntries.Count == 0)
             changeEntries.Add("UPDATED");
 
@@ -189,11 +163,7 @@ public class DevicesController : ControllerBase
         return Ok(ToDto(device));
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // DELETE /api/devices/{id}
-    // ──────────────────────────────────────────────────────────────
-    /// <summary>Delete a device by ID. Requires Admin role.</summary>
-    /// <param name="id">Device ID</param>
+    // DELETE /api/devices/{id} — Admin only
     [HttpDelete("{id:int}")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -211,12 +181,11 @@ public class DevicesController : ControllerBase
         var model = device.Model ?? "N/A";
         var now = DateTime.UtcNow;
 
-        // Remove old logs and device
         _context.ChangeLogs.RemoveRange(device.ChangeLogs);
         _context.Devices.Remove(device);
         await _context.SaveChangesAsync();
 
-        // Add deletion log (DeviceId is null since device is gone, SerialNumber preserves identity)
+        // Keep a tombstone log entry (DeviceId = null) so deletions still appear in audit trail
         _context.ChangeLogs.Add(new ChangeLog
         {
             DeviceId = null,
@@ -229,13 +198,7 @@ public class DevicesController : ControllerBase
         return NoContent();
     }
 
-    // ──────────────────────────────────────────────────────────────
     // GET /api/devices/outdated
-    // ──────────────────────────────────────────────────────────────
-    /// <summary>
-    /// List devices whose firmware version is not the latest version
-    /// recorded in the FirmwareVersions table.
-    /// </summary>
     [HttpGet("outdated")]
     [Authorize]
     [ProducesResponseType(typeof(IEnumerable<OutdatedDeviceDto>), StatusCodes.Status200OK)]
@@ -266,10 +229,7 @@ public class DevicesController : ControllerBase
         return Ok(outdated);
     }
 
-    // ──────────────────────────────────────────────────────────────
     // GET /api/devices/missing-firmware
-    // ──────────────────────────────────────────────────────────────
-    /// <summary>List devices that have no firmware version assigned.</summary>
     [HttpGet("missing-firmware")]
     [Authorize]
     [ProducesResponseType(typeof(IEnumerable<DeviceDto>), StatusCodes.Status200OK)]
@@ -284,18 +244,11 @@ public class DevicesController : ControllerBase
         return Ok(devices);
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // Helpers
-    // ──────────────────────────────────────────────────────────────
     private static DeviceDto ToDto(Device d) =>
         new(d.Id, d.SerialNumber, d.Model, d.Status, d.FirmwareVersion, d.CreatedAt, d.UpdatedAt);
 }
 
-// ──────────────────────────────────────────────────────────────────
-// DTOs  (kept in same file to avoid touching any existing file)
-// ──────────────────────────────────────────────────────────────────
-
-/// <summary>Device read response.</summary>
+// DTOs
 public record DeviceDto(
     int Id,
     string SerialNumber,
@@ -305,7 +258,6 @@ public record DeviceDto(
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
-/// <summary>Outdated device with current and latest firmware versions.</summary>
 public record OutdatedDeviceDto(
     int Id,
     string SerialNumber,
@@ -315,44 +267,35 @@ public record OutdatedDeviceDto(
     string LatestFirmware,
     DateTime UpdatedAt);
 
-/// <summary>Payload for creating a new device.</summary>
 public class CreateDeviceRequest
 {
-    /// <example>SN-001-XYZ</example>
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.StringLength(100)]
     public string SerialNumber { get; set; } = null!;
 
-    /// <example>ThinkPad X1</example>
     [System.ComponentModel.DataAnnotations.StringLength(100)]
     public string? Model { get; set; }
 
-    /// <example>active</example>
     [System.ComponentModel.DataAnnotations.Required]
     [System.ComponentModel.DataAnnotations.StringLength(20)]
     public string Status { get; set; } = null!;
 
-    /// <example>2.1.0</example>
     [System.ComponentModel.DataAnnotations.StringLength(50)]
     public string? FirmwareVersion { get; set; }
 }
 
-/// <summary>Payload for updating an existing device. All fields are optional.</summary>
+// All fields optional — only non-null values are applied on update
 public class UpdateDeviceRequest
 {
-    /// <example>SN-001-XYZ</example>
     [System.ComponentModel.DataAnnotations.StringLength(100)]
     public string? SerialNumber { get; set; }
 
-    /// <example>ThinkPad X1</example>
     [System.ComponentModel.DataAnnotations.StringLength(100)]
     public string? Model { get; set; }
 
-    /// <example>retired</example>
     [System.ComponentModel.DataAnnotations.StringLength(20)]
     public string? Status { get; set; }
 
-    /// <example>2.2.0</example>
     [System.ComponentModel.DataAnnotations.StringLength(50)]
     public string? FirmwareVersion { get; set; }
 }

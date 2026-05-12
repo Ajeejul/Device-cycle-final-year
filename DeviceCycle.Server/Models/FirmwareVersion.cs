@@ -9,7 +9,7 @@ public partial class FirmwareVersion
 
     public string Version { get; set; } = null!;
 
-    public string? Notes { get; set; }         
+    public string? Notes { get; set; }
 
     public DateTime ReleasedAt { get; set; }
 

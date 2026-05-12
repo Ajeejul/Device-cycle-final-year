@@ -7,7 +7,6 @@ import {
   ChevronDown,
 } from 'lucide-react'
 
-// ── Action metadata ───────────────────────────────────────────────────────────
 function getActionMeta(action: string) {
   const a = action.toUpperCase()
   if (a.startsWith('CREATED'))          return { icon: Plus,      color: 'emerald', label: 'Created' }
@@ -29,7 +28,6 @@ const COLOR_MAP: Record<string, { dot: string; icon: string; ring: string }> = {
   gray:    { dot: 'bg-gray-400',    icon: 'text-gray-500 dark:text-gray-400',        ring: 'ring-gray-200 dark:ring-gray-700 bg-gray-50 dark:bg-gray-800/40' },
 }
 
-// ── Parse the action string into human-readable parts ─────────────────────────
 function parseActionDetail(action: string): { headline: string; detail: string | null } {
   const arrow = action.includes('→') ? '→' : (action.includes('->') ? '->' : null)
   if (arrow) {
@@ -48,7 +46,6 @@ function formatKey(key: string): string {
     .replace(/\b\w/g, c => c.toUpperCase())
 }
 
-// ── Single Timeline Entry ─────────────────────────────────────────────────────
 function TimelineEntry({
   entry,
   isLast,
@@ -66,15 +63,12 @@ function TimelineEntry({
 
   return (
     <div className="relative flex gap-4 pb-6 animate-fade-in">
-      {/* Vertical connector */}
       {!isLast && <div className="timeline-line" />}
 
-      {/* Icon dot */}
       <div className={`relative flex-shrink-0 w-10 h-10 rounded-full ring-2 ${ring} flex items-center justify-center z-10`}>
         <Icon size={14} className={iconCls} strokeWidth={2} />
       </div>
 
-      {/* Content */}
       <div className="flex-1 min-w-0 pt-1.5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-1">
           <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{headline}</span>
@@ -98,7 +92,6 @@ function TimelineEntry({
   )
 }
 
-// ── Day Group Header ──────────────────────────────────────────────────────────
 function DayHeader({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 mb-4 mt-2">
@@ -110,7 +103,6 @@ function DayHeader({ label }: { label: string }) {
   )
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
 const ACTION_FILTERS = [
   { label: 'All', value: '' },
   { label: 'Created',  value: 'CREATED' },
@@ -140,12 +132,10 @@ export default function ChangeLogTable() {
     )
   })
 
-  // Group by calendar day
   const grouped = groupByDay(filtered)
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -179,7 +169,6 @@ export default function ChangeLogTable() {
         </button>
       </div>
 
-      {/* Timeline */}
       {isLoading && (
         <div className="card p-6 space-y-6 animate-pulse">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -236,7 +225,6 @@ export default function ChangeLogTable() {
   )
 }
 
-// ── Group entries by day ──────────────────────────────────────────────────────
 function groupByDay(entries: ChangeLogEntryWithDeviceDto[]): { dayLabel: string; entries: ChangeLogEntryWithDeviceDto[] }[] {
   const map = new Map<string, ChangeLogEntryWithDeviceDto[]>()
 
