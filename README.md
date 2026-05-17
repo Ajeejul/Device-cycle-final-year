@@ -1,71 +1,51 @@
 DeviceCycle — Product Lifecycle Management
-A web application built to manage the complete lifecycle of devices in an organization. From registering a new device to tracking its firmware, status changes, and eventual decommission — everything is handled in one place with a full audit trail.
+DeviceCycle is a comprehensive web application designed to manage the complete lifecycle of hardware devices within an organization. It replaces messy manual tracking systems (like outdated spreadsheets) with a clean, centralized dashboard that provides a full audit trail of every device from registration to decommissioning.
 
-Why we built this
-Managing device fleets manually is messy. Spreadsheets go out of date, nobody knows which laptop has what firmware, and when something goes wrong there's no history to look back on. DeviceCycle solves that by giving teams a clean dashboard to track every device and every change made to it.
+🎯 Key Features
+Centralized Dashboard: A live overview of your entire device fleet, including total devices, active counts, firmware version distribution, and alerts for devices running outdated software.
+ 
+Robust Device Management: Easily add, update, and decommission devices. Track essential details such as serial numbers, models, current status, and firmware versions.
 
-What it does
-Dashboard — live overview of total devices, active count, firmware versions, and outdated device alerts
-Device Management — add, update, and decommission devices with serial number, model, status, and firmware tracking
-Firmware Catalog — manage firmware versions and automatically detect which devices are running outdated builds
-Change Logs — every action is automatically recorded with a timestamp. Create, update, status change, firmware upgrade, deletion — all tracked
-Notifications — real-time activity panel in the header showing recent fleet events
-Authentication — JWT-based login with role separation. Admins can make changes, regular users get read-only access
-Tech Stack
-Frontend
+Firmware Catalog: Manage and track available firmware versions. The system automatically detects and flags which devices are running outdated builds, ensuring compliance and security.
 
-React 18 + Vite
-Tailwind CSS with dark mode support
-TanStack Query v5 for data fetching
-Lucide React icons
-Backend
+Comprehensive Change Logs: Every action taken on a device is automatically recorded with a precise timestamp. Whether a device is created, updated, changes status, receives a firmware upgrade, or is deleted, a full history is retained.
 
-ASP.NET Core 8 Web API
-Entity Framework Core 8
-SQL Server
-ASP.NET Identity + JWT Bearer authentication
-Project Structure
-├── DeviceCycle.Server/
-│   ├── Controllers/        API endpoints
-│   ├── Models/             EF Core models and DbContext
-│   ├── Migrations/         Database migrations
-│   └── appsettings.json    Configuration
+Real-time Notifications: An activity panel in the application header displays recent fleet events as they happen.
+
+Role-Based Authentication: Secure JWT-based login system separating user privileges. Administrators can make modifications to the device fleet, while regular users are restricted to read-only access.
+
+
+🛠️ Technology Stack
+The project utilizes a modern, robust full-stack architecture, split into a single-page application frontend and a RESTful API backend.
+
+Frontend (devicecycle-client)
+Framework: React 18 built with Vite for fast development and optimized production builds.
+Language: TypeScript for type-safe code.
+Styling: Tailwind CSS, utilizing its utility-first approach and supporting dark mode aesthetics.
+Data Fetching & State: TanStack Query v5 for efficient API data caching and synchronization.
+Routing: React Router DOM (v6).
+Data Visualization: Recharts for rendering dashboard analytics.
+Icons: Lucide React.
+
+Backend (DeviceCycle.Server)
+Framework: ASP.NET Core 8 Web API.
+ORM: Entity Framework Core 8 for data access.
+Database: SQL Server.
+Security: ASP.NET Identity combined with JWT (JSON Web Token) Bearer authentication for secure, stateless sessions.
+
+📂 Project Architecture
+The repository is structured into two main applications:
+
+text
+├── DeviceCycle.Server/     (Backend ASP.NET Core API)
+│   ├── Controllers/        # API endpoints
+│   ├── Models/             # Entity Framework Core models & DbContext
+│   ├── Migrations/         # Database schema migrations
+│   └── appsettings.json    # Connection strings and configuration
 │
-└── devicecycle-client/
+└── devicecycle-client/     (Frontend React Application)
     └── src/
-        ├── api/            API calls
-        ├── components/     Reusable UI components
-        ├── pages/          Dashboard, Devices, Firmware, ChangeLogs, Login
-        └── context/        Auth and Theme providers
-Getting Started
-Prerequisites
-.NET 8 SDK
-Node.js 18+
-SQL Server (local or express)
-Backend
-Update the connection string in DeviceCycle.Server/appsettings.json
-Apply migrations:
-dotnet ef database update
-Run the server:
-dotnet run
-API runs at https://localhost:7110
-
-Frontend
-cd devicecycle-client
-npm install
-npm run dev
-App runs at http://localhost:8080
-
-API Overview
-Method	Endpoint	Description
-POST	/api/auth/register	Register a new user
-POST	/api/auth/login	Login and get JWT token
-GET	/api/devices	List all devices
-POST	/api/devices	Add a device (Admin)
-PUT	/api/devices/{id}	Update a device (Admin)
-DELETE	/api/devices/{id}	Delete a device (Admin)
-GET	/api/devices/outdated	Devices not on latest firmware
-GET	/api/changelogs	Query change logs with filters
-GET	/api/firmware	List firmware versions
-POST	/api/firmware	Add firmware version (Admin)
-
+        ├── api/            # Centralized API service calls
+        ├── components/     # Reusable UI components
+        ├── pages/          # Main views: Dashboard, Devices, Firmware, ChangeLogs, Login
+        └── context/        # React Context providers for Auth and Theme
