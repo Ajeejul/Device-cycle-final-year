@@ -68,9 +68,4 @@ GET	/api/devices/outdated	Devices not on latest firmware
 GET	/api/changelogs	Query change logs with filters
 GET	/api/firmware	List firmware versions
 POST	/api/firmware	Add firmware version (Admin)
-Team
-Name	Role
-Rutuja	Team Lead — Database design and data modeling
-Prakhar	Frontend — React UI, components, API integration
-Venkat	Authentication — JWT, Identity, role management
-Anshu	Backend — API controllers, business logic, EF Core
+
